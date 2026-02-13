@@ -1,179 +1,300 @@
 import React from 'react';
-import { TaxResult } from '../types';
-import { Card, CardHeader } from './ui/Card';
-import { Tooltip } from './ui/Tooltip';
+import { TaxResult, TaxConfig } from '../types';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from './ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import { HelpCircle, TrendingDown, Wallet, Shield, Receipt } from 'lucide-react';
+import { cn, formatCurrency } from '@/lib/utils';
 
 interface ResultsViewProps {
   result: TaxResult;
+  config: TaxConfig;
 }
 
-const formatCurrency = (val: number) => 
-  new Intl.NumberFormat('vi-VN').format(val);
+export const ResultsView: React.FC<ResultsViewProps> = ({ result, config }) => {
+  const totalInsurance = result.socialInsurance + result.healthInsurance + result.unemploymentInsurance;
 
-const TableRow: React.FC<{ 
-  label: string; 
-  value: number; 
-  subValue?: string; 
-  isHeader?: boolean; 
-  isTotal?: boolean; 
-  indent?: boolean;
-  negative?: boolean;
-  tooltip?: string;
-  highlight?: boolean;
-}> = ({ label, value, subValue, isHeader, isTotal, indent, negative, tooltip, highlight }) => (
-  <div className={`flex justify-between items-center py-3 px-4 ${isHeader ? 'bg-slate-50 border-y border-slate-200' : 'border-b border-slate-50'} ${highlight ? 'bg-emerald-50/60' : ''} hover:bg-slate-50/80 transition-colors`}>
-    <div className={`flex items-center gap-2 ${indent ? 'pl-6' : ''}`}>
-      <span className={`${isTotal ? 'font-bold text-slate-900' : isHeader ? 'font-semibold text-slate-700' : 'text-slate-600 font-medium'}`}>
-        {label}
-      </span>
-      {subValue && <span className="text-xs text-slate-400 font-normal">({subValue})</span>}
-      {tooltip && (
-        <Tooltip content={tooltip}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300 hover:text-emerald-500 cursor-help"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-        </Tooltip>
-      )}
-    </div>
-    <span className={`${isTotal ? 'font-bold text-lg' : 'text-sm font-semibold'} ${negative ? 'text-rose-500' : 'text-slate-800'}`}>
-       {negative && value > 0 ? '-' : ''}{formatCurrency(value)}
-    </span>
-  </div>
-);
-
-export const ResultsView: React.FC<ResultsViewProps> = ({ result }) => {
   const chartData = [
-    { name: 'Thực nhận', value: result.totalNet, color: '#10b981' },
-    { name: 'Thuế', value: result.totalTax, color: '#f43f5e' },
-    { name: 'Bảo hiểm', value: result.socialInsurance + result.healthInsurance + result.unemploymentInsurance, color: '#f59e0b' },
+    { name: 'Thực nhận', value: result.totalNet, color: 'hsl(158, 64%, 32%)' },
+    { name: 'Thuế TNCN', value: result.totalTax, color: 'hsl(0, 84%, 60%)' },
+    { name: 'Bảo hiểm', value: totalInsurance, color: 'hsl(45, 93%, 47%)' },
   ].filter(d => d.value > 0);
 
-  const totalDeductions = result.gross - result.totalTax - result.totalNet - (result.socialInsurance + result.healthInsurance + result.unemploymentInsurance); // Approximation/Logic check
-  // Actually simpler:
-  // TaxableIncome = IncomeBeforeTax - Deductions
-  // Deductions = IncomeBeforeTax - TaxableIncome
-  const calculatedDeductions = result.incomeBeforeTax - result.taxableIncome;
+  const totalDeductions = config.deduction.personal + (config.deduction.dependent * Math.max(0, (result.incomeBeforeTax - result.taxableIncome - config.deduction.personal) / config.deduction.dependent));
+  const dependentDeduction = result.incomeBeforeTax - result.taxableIncome - config.deduction.personal;
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      
-      {/* 1. Summary Header */}
-      <div className="flex flex-col sm:flex-row gap-4 items-stretch">
-          <div className="flex-1 bg-slate-900 rounded-2xl p-6 text-white shadow-lg shadow-slate-900/10 flex flex-col justify-between">
-             <div>
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Lương Thực nhận (Net)</p>
-                <div className="text-4xl font-black text-emerald-400 tracking-tight">
-                    {formatCurrency(result.net)} <span className="text-lg text-emerald-400/50 font-medium">VNĐ</span>
-                </div>
-             </div>
-             <div className="mt-4 pt-4 border-t border-slate-800 flex gap-6">
-                <div>
-                    <p className="text-slate-500 text-[10px] font-bold uppercase">Lương Gross</p>
-                    <p className="font-bold text-lg">{formatCurrency(result.gross)}</p>
-                </div>
-                <div>
-                    <p className="text-slate-500 text-[10px] font-bold uppercase">Tổng thuế</p>
-                    <p className="font-bold text-lg text-rose-400">{formatCurrency(result.personalIncomeTax)}</p>
-                </div>
-             </div>
-          </div>
-          
-          <div className="bg-white border border-slate-200 rounded-2xl p-2 w-full sm:w-48 flex items-center justify-center shadow-sm">
-             <div className="w-32 h-32 relative">
-                <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie
-                        data={chartData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={25}
-                        outerRadius={45}
-                        paddingAngle={4}
-                        dataKey="value"
-                        stroke="none"
-                        >
-                        {chartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                        </Pie>
-                        <RechartsTooltip formatter={(val:number) => formatCurrency(val)} contentStyle={{fontSize: '10px'}} />
-                    </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-400 pointer-events-none">
-                    Tỷ lệ
-                </div>
-             </div>
-          </div>
-      </div>
-
-      {/* 2. Detailed Breakdown Table (The requested view) */}
-      <Card className="overflow-hidden border border-slate-200 shadow-md">
-          <CardHeader title="Diễn giải chi tiết (VNĐ)" className="bg-white border-b border-slate-100" />
-          <div className="bg-white text-sm">
-              <TableRow label="Lương GROSS" value={result.gross} isHeader />
-              
-              <TableRow label="Bảo hiểm xã hội (8%)" value={result.socialInsurance} indent negative tooltip="Tối đa trên 20 lần lương cơ sở" />
-              <TableRow label="Bảo hiểm y tế (1.5%)" value={result.healthInsurance} indent negative tooltip="Tối đa trên 20 lần lương cơ sở" />
-              <TableRow label="Bảo hiểm thất nghiệp (1%)" value={result.unemploymentInsurance} indent negative tooltip="Tối đa trên 20 lần lương tối thiểu vùng" />
-              
-              <TableRow label="Thu nhập trước thuế" value={result.incomeBeforeTax} isHeader highlight />
-              
-              <TableRow label="Giảm trừ gia cảnh bản thân" value={11000000} indent tooltip="Mức quy định hiện hành: 11 triệu/tháng" />
-              <TableRow label="Giảm trừ người phụ thuộc" value={Math.max(0, calculatedDeductions - 11000000)} indent tooltip="4.4 triệu/người/tháng" />
-              
-              <TableRow label="Thu nhập chịu thuế" value={result.taxableIncome} isHeader highlight />
-              
-              <TableRow label="Thuế thu nhập cá nhân (*)" value={result.personalIncomeTax} isTotal negative />
-          </div>
-      </Card>
-
-      {/* 3. Progressive Tax Detail Table */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-emerald-700 font-bold px-1">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>
-            <h3>(*) Chi tiết thuế thu nhập cá nhân</h3>
-        </div>
-        <Card className="overflow-hidden border border-emerald-100 shadow-sm">
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-emerald-50/50 text-slate-600 font-semibold text-xs uppercase tracking-wider">
-                        <tr>
-                            <th className="px-4 py-3 border-b border-emerald-100">Mức chịu thuế</th>
-                            <th className="px-4 py-3 border-b border-emerald-100 text-center">Thuế suất</th>
-                            <th className="px-4 py-3 border-b border-emerald-100 text-right">Thu nhập tính thuế</th>
-                            <th className="px-4 py-3 border-b border-emerald-100 text-right">Tiền nộp</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                        {result.detailTax.map((level, idx) => (
-                            <tr key={idx} className={`transition-colors ${level.taxAmount > 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/30 text-slate-400'}`}>
-                                <td className="px-4 py-3">
-                                    {level.level === 7 
-                                      ? `Trên ${formatCurrency(level.minIncome)}` 
-                                      : `${level.minIncome > 0 ? 'Trên ' + formatCurrency(level.minIncome) + ' ' : ''}Đến ${formatCurrency(level.maxIncome)}`}
-                                </td>
-                                <td className="px-4 py-3 text-center font-mono">
-                                    {level.rate * 100}%
-                                </td>
-                                <td className="px-4 py-3 text-right font-medium">
-                                    {formatCurrency(level.taxedAmount)}
-                                </td>
-                                <td className={`px-4 py-3 text-right font-bold ${level.taxAmount > 0 ? 'text-rose-500' : ''}`}>
-                                    {formatCurrency(level.taxAmount)}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                    <tfoot className="bg-slate-50 font-bold text-slate-800">
-                        <tr>
-                            <td colSpan={3} className="px-4 py-3 text-right uppercase text-xs tracking-wider">Tổng tiền thuế</td>
-                            <td className="px-4 py-3 text-right text-rose-600 text-base">{formatCurrency(result.personalIncomeTax)}</td>
-                        </tr>
-                    </tfoot>
-                </table>
+    <div className="space-y-4 animate-fade-in">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="bg-primary text-primary-foreground">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-primary-foreground/70 mb-1">
+              <Wallet className="h-4 w-4" />
+              <span className="text-xs font-medium">Thực nhận</span>
             </div>
+            <p className="text-2xl font-bold tabular-nums">
+              {formatCurrency(result.net)}
+            </p>
+            <p className="text-xs text-primary-foreground/60 mt-1">VNĐ/tháng</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <TrendingDown className="h-4 w-4" />
+              <span className="text-xs font-medium">Tổng khấu trừ</span>
+            </div>
+            <p className="text-2xl font-bold tabular-nums text-destructive">
+              {formatCurrency(result.gross - result.net)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">VNĐ/tháng</p>
+          </CardContent>
         </Card>
       </div>
 
+      {/* Chart & Quick Stats */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <div className="w-24 h-24 flex-shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={20}
+                    outerRadius={40}
+                    paddingAngle={2}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    formatter={(val: number) => formatCurrency(val)}
+                    contentStyle={{ fontSize: '12px', borderRadius: '6px' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex-1 space-y-2">
+              {chartData.map((item, i) => (
+                <div key={i} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="text-muted-foreground">{item.name}</span>
+                  </div>
+                  <span className="font-medium tabular-nums">{formatCurrency(item.value)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Detailed Breakdown */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Receipt className="h-4 w-4" />
+            Chi tiết khấu trừ
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableBody>
+              <TableRow className="bg-muted/30">
+                <TableCell className="font-medium">Lương GROSS</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">
+                  {formatCurrency(result.gross)}
+                </TableCell>
+              </TableRow>
+
+              {/* Insurance Section */}
+              <TableRow>
+                <TableCell className="text-muted-foreground pl-6">
+                  <div className="flex items-center gap-1.5">
+                    BHXH (8%)
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-3 w-3 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Tối đa 20 lần lương cơ sở</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right text-destructive tabular-nums">
+                  -{formatCurrency(result.socialInsurance)}
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="text-muted-foreground pl-6">BHYT (1.5%)</TableCell>
+                <TableCell className="text-right text-destructive tabular-nums">
+                  -{formatCurrency(result.healthInsurance)}
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="text-muted-foreground pl-6">BHTN (1%)</TableCell>
+                <TableCell className="text-right text-destructive tabular-nums">
+                  -{formatCurrency(result.unemploymentInsurance)}
+                </TableCell>
+              </TableRow>
+
+              <TableRow className="bg-muted/30">
+                <TableCell className="font-medium">Thu nhập trước thuế</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">
+                  {formatCurrency(result.incomeBeforeTax)}
+                </TableCell>
+              </TableRow>
+
+              {/* Deductions */}
+              <TableRow>
+                <TableCell className="text-muted-foreground pl-6">
+                  Giảm trừ bản thân
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  -{formatCurrency(config.deduction.personal)}
+                </TableCell>
+              </TableRow>
+              {dependentDeduction > 0 && (
+                <TableRow>
+                  <TableCell className="text-muted-foreground pl-6">
+                    Giảm trừ người phụ thuộc
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    -{formatCurrency(dependentDeduction)}
+                  </TableCell>
+                </TableRow>
+              )}
+
+              <TableRow className="bg-muted/30">
+                <TableCell className="font-medium">Thu nhập chịu thuế</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">
+                  {formatCurrency(result.taxableIncome)}
+                </TableCell>
+              </TableRow>
+
+              <TableRow className="border-t-2">
+                <TableCell className="font-semibold">Thuế TNCN phải nộp</TableCell>
+                <TableCell className="text-right font-bold text-destructive tabular-nums">
+                  -{formatCurrency(result.personalIncomeTax)}
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Tax Brackets Detail */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Shield className="h-4 w-4" />
+            Biểu thuế lũy tiến
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-xs">Mức chịu thuế</TableHead>
+                <TableHead className="text-xs text-center">Thuế suất</TableHead>
+                <TableHead className="text-xs text-right">Thu nhập</TableHead>
+                <TableHead className="text-xs text-right">Thuế</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {result.detailTax.map((level, idx) => (
+                <TableRow
+                  key={idx}
+                  className={cn(
+                    level.taxAmount === 0 && "text-muted-foreground/50"
+                  )}
+                >
+                  <TableCell className="text-xs">
+                    {level.maxIncome === Infinity
+                      ? `Trên ${formatCurrency(level.minIncome)}`
+                      : level.minIncome > 0
+                      ? `${formatCurrency(level.minIncome)} - ${formatCurrency(level.maxIncome)}`
+                      : `Đến ${formatCurrency(level.maxIncome)}`}
+                  </TableCell>
+                  <TableCell className="text-center font-mono text-xs">
+                    {level.rate * 100}%
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">
+                    {formatCurrency(level.taxedAmount)}
+                  </TableCell>
+                  <TableCell className={cn(
+                    "text-right tabular-nums text-xs font-medium",
+                    level.taxAmount > 0 && "text-destructive"
+                  )}>
+                    {formatCurrency(level.taxAmount)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell colSpan={3} className="text-right text-xs font-medium">
+                  Tổng thuế TNCN
+                </TableCell>
+                <TableCell className="text-right font-bold text-destructive tabular-nums">
+                  {formatCurrency(result.personalIncomeTax)}
+                </TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Additional Income Details */}
+      {result.additionalTaxDetails && result.additionalTaxDetails.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">Thu nhập khác</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Khoản thu</TableHead>
+                  <TableHead className="text-xs">Loại</TableHead>
+                  <TableHead className="text-xs text-right">Số tiền</TableHead>
+                  <TableHead className="text-xs text-right">Thuế</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {result.additionalTaxDetails.map((item, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell className="text-xs font-medium">{item.label}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{item.typeName}</TableCell>
+                    <TableCell className="text-right tabular-nums text-xs">
+                      {formatCurrency(item.amount)}
+                    </TableCell>
+                    <TableCell className={cn(
+                      "text-right tabular-nums text-xs",
+                      item.tax > 0 && "text-destructive"
+                    )}>
+                      {item.tax > 0 ? `-${formatCurrency(item.tax)}` : '0'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

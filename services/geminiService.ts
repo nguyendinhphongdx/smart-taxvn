@@ -1,13 +1,20 @@
 import { GoogleGenAI } from "@google/genai";
 import { AiAdviceResponse } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
 
 export const getTaxAdvice = async (
-  question: string, 
+  question: string,
   currentContext?: string
 ): Promise<AiAdviceResponse> => {
+  if (!apiKey) {
+    return {
+      answer: "Tính năng AI chưa được cấu hình. Vui lòng thêm GEMINI_API_KEY vào file .env.local để sử dụng.",
+    };
+  }
+
   try {
+    const ai = new GoogleGenAI({ apiKey });
     const model = "gemini-3-flash-preview"; 
     
     const systemInstruction = `
